@@ -6,11 +6,11 @@ const monthColumns = [
 // ✅ mapping categorie → righe
 const categoryRows: Record<string, number> = {
   affitto: 26,
-  casa: 26,
   spesa: 28,
   tel: 30,
   health: 32,
-  entertainment: 34
+  entertainment: 34,
+  casa: 36
 }
 
 // 🔥 CALCOLO
