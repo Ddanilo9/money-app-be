@@ -17,41 +17,52 @@ function getUserEmail(req: any) {
 
 const GROUP_ID = 'casa'
 
+// 🔥 UTENTI DEL GRUPPO
+const users = [
+  'daniloann@mail.com',
+  'mirandaceb@mail.com'
+]
+
 // 🔥 MAPPA UTENTE → GOOGLE SHEET
 const userSheets: Record<string, string> = {
   'daniloann@mail.com': 'https://script.google.com/macros/s/AKfycbz9GYOl7aid8H0Erufj7UHEoUnSBHtwjTvRGboXrZoZX5zRGyKDklkduGJqibh50eTxkw/exec',
-  'mirandaceb@mail.com': 'https://script.google.com/macros/s/URL_MIRANDA/exec'
+  'mirandaceb@mail.com': 'https://script.google.com/macros/s/AKfycbxGbrUfLMjrlePTn9Je3-_Nu7zq2Y6E9ksUNmD75cSjOlf1XPsk37fOmWy9lfBUe96_hQ/exec'
 }
 
 // =====================
-// 🔧 helper sync
+// 🔧 helper sync (FIX)
 // =====================
-async function syncGroupExpenses(email: string | null) {
+async function syncGroupExpenses() {
   try {
-    if (!email) {
-      console.warn('⚠️ Email mancante, skip sync')
-      return
-    }
+    console.log('🔄 Sync group expenses for ALL users')
 
-    console.log('🔄 Sync group expenses for:', email)
-
-    const { data: allExpenses } = await supabase
+    const { data: allExpenses, error } = await supabase
       .from('expenses')
       .select('*')
       .eq('group_id', GROUP_ID)
 
-    const sheetUrl = userSheets[email]
-
-    if (!sheetUrl) {
-      console.warn('⚠️ Nessun sheet per utente:', email)
+    if (error) {
+      console.error('❌ Error fetching expenses:', error)
       return
     }
 
-    console.log('🌍 Sheet URL:', sheetUrl)
+    console.log('📦 ALL EXPENSES:', allExpenses)
 
-    await syncToSheets(allExpenses || [], email, sheetUrl)
+    for (const email of users) {
+      const sheetUrl = userSheets[email]
 
-    console.log('✅ Sheets sync done')
+      if (!sheetUrl) {
+        console.warn('⚠️ Nessun sheet per:', email)
+        continue
+      }
+
+      console.log('\n👤 Sync per:', email)
+      console.log('🌍 Sheet URL:', sheetUrl)
+
+      await syncToSheets(allExpenses || [], email, sheetUrl)
+    }
+
+    console.log('\n✅ Sync COMPLETATO per tutti\n')
 
   } catch (err) {
     console.error('❌ Sheets sync error:', err)
@@ -80,10 +91,8 @@ router.get('/', async (req, res) => {
     return res.status(500).json(error)
   }
 
-  // 🔥 SYNC
-  if (email) {
-    await syncGroupExpenses(email)
-  }
+  // 🔥 SYNC PER TUTTI
+  await syncGroupExpenses()
 
   console.log('🟢 ===== END GET =====\n')
 
@@ -118,9 +127,8 @@ router.post('/', async (req, res) => {
     return res.status(500).json(error)
   }
 
-  if (email) {
-    await syncGroupExpenses(email)
-  }
+  // 🔥 SYNC PER TUTTI
+  await syncGroupExpenses()
 
   console.log('🟢 ===== END POST =====\n')
 
@@ -154,9 +162,8 @@ router.put('/:id', async (req, res) => {
     return res.status(500).json(error)
   }
 
-  if (email) {
-    await syncGroupExpenses(email)
-  }
+  // 🔥 SYNC PER TUTTI
+  await syncGroupExpenses()
 
   console.log('🟢 ===== END PUT =====\n')
 
