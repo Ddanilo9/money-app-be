@@ -25,8 +25,8 @@ const users = [
 
 // 🔥 MAPPA UTENTE → GOOGLE SHEET
 const userSheets: Record<string, string> = {
-  'daniloann@mail.com': 'https://script.google.com/macros/s/AKfycbz9GYOl7aid8H0Erufj7UHEoUnSBHtwjTvRGboXrZoZX5zRGyKDklkduGJqibh50eTxkw/exec',
-  'mirandaceb@mail.com': 'https://script.google.com/macros/s/AKfycbxGbrUfLMjrlePTn9Je3-_Nu7zq2Y6E9ksUNmD75cSjOlf1XPsk37fOmWy9lfBUe96_hQ/exec'
+  'daniloann@mail.com': 'https://script.google.com/macros/s/AKfycby6QwXUfwht-fBTAK9MIVfJu2FN2TTBwZxVy4OuGggMmwOlKmEASt06A08Kh55HMAwOZA/exec',
+  'mirandaceb@mail.com': 'https://script.google.com/macros/s/AKfycbyXubGgukl5pAgSdsyrVdhCp6RlxXQKQWnogUfMteGtmSKufchtAIxzlGQ2JLpXMLeCpg/exec'
 }
 
 // =====================
