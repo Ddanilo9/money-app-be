@@ -5,13 +5,42 @@ const monthColumns = [
 
 // ✅ mapping categorie → righe
 const categoryRows: Record<string, number> = {
-  affitto: 26,
-  spesa: 28,
-  tel: 30,
-  health: 32,
-  entertainment: 34,
-  casa: 36,
-  trasporti: 38
+  // CASA
+  mutuo: 30,
+  affitto: 31,
+  utenza: 32,
+  rate: 33,
+  'oggetti casa': 34,
+  assicurazioni: 35,
+
+  // TRASPORTI
+  'metro/bus': 38,
+  benzina: 39,
+
+  // SPESA DAILY
+  supermercato: 42,
+  'cene/uscite': 43,
+  vario: 44,
+  'shopping vestiti': 45,
+  cosmetica: 46,
+
+  // ENTERTAINMENT
+  entertainment: 49,
+
+  // HEALTH
+  palestra: 52,
+  salute: 53,
+  psicologo: 54,
+
+  // HOLIDAYS
+  roadtrip: 57,
+  vacanze: 58,
+
+  // TASSE
+  commercialista: 61,
+  'tax autonomo': 62,
+  'gastos autonomo': 63,
+  'tax varie': 64
 }
 
 // 🔥 CALCOLO
@@ -66,82 +95,74 @@ export async function syncToSheets(
   userEmail: string,
   scriptUrl: string
 ) {
-  console.log('\n🚀 ===== SYNC TO SHEETS START =====')
+  console.log('\n🚀 ===== SYNC CURRENT MONTH =====')
 
-  // Raggruppa le spese per anno → mese
-  const byYearMonth: Record<number, Record<number, any[]>> = {}
+  const ALL_CATEGORIES = Object.keys(categoryRows)
 
-  expenses.forEach(e => {
-    if (!e.created_at) {
-      console.warn('⚠️ created_at mancante, skip:', e)
-      return
-    }
-    const normalized = String(e.created_at).replace(' ', 'T').replace(/\+00$/, '+00:00')
-    const d = new Date(normalized)
-    if (isNaN(d.getTime())) {
-      console.warn('⚠️ Data non valida:', e.created_at)
-      return
-    }
-    const year = d.getFullYear()
-    const month = d.getMonth()
-    if (!byYearMonth[year]) byYearMonth[year] = {}
-    if (!byYearMonth[year][month]) byYearMonth[year][month] = []
-    byYearMonth[year][month].push(e)
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth()
+  const column = monthColumns[currentMonth]
+
+  console.log('📅 Sync mese:', currentYear, currentMonth)
+
+  // 🔥 FILTRA SOLO MESE CORRENTE
+  const monthExpenses = expenses.filter(e => {
+    if (!e.created_at) return false
+
+    const d = new Date(e.created_at)
+
+    return (
+      d.getFullYear() === currentYear &&
+      d.getMonth() === currentMonth
+    )
   })
 
-  console.log('📅 ANNI TROVATI:', Object.keys(byYearMonth))
+  console.log('📦 EXPENSES MESE:', monthExpenses)
 
-  // Per ogni anno, costruisce un payload e manda una richiesta
-  for (const [yearStr, monthMap] of Object.entries(byYearMonth)) {
-    const year = Number(yearStr)
-    const payload: Record<string, any> = { _year: year }
+  const totals = calculateUserTotals(monthExpenses, userEmail)
 
-    for (const [monthStr, monthExpenses] of Object.entries(monthMap)) {
-      const month = Number(monthStr)
-      const column = monthColumns[month]
+  console.log('📊 TOTALS:', totals)
 
-      if (!column) {
-        console.error('❌ Mese fuori range:', month)
-        continue
-      }
-
-      const totals = calculateUserTotals(monthExpenses, userEmail)
-
-      Object.keys(totals).forEach(cat => {
-        const row = categoryRows[cat]
-        if (!row) {
-          console.warn('⚠️ Categoria non mappata:', cat)
-          return
-        }
-        payload[`${cat}_${column}`] = {
-          cell: `${column}${row}`,
-          value: totals[cat] ?? 0
-        }
-        console.log(`🧱 [${year}] CELL:`, `${cat}_${column}`, payload[`${cat}_${column}`])
-      })
-    }
-
-    if (Object.keys(payload).length <= 1) {
-      console.warn(`⚠️ Nessun dato per anno ${year}`)
-      continue
-    }
-
-    console.log(`📤 SEND TO SHEETS [${year}]:`, payload)
-
-    try {
-      const res = await fetch(scriptUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-
-      console.log(`📡 STATUS [${year}]:`, res.status)
-      const text = await res.text()
-      console.log(`📡 SHEETS RESPONSE [${year}]:`, text)
-    } catch (err) {
-      console.error(`❌ ERRORE FETCH SHEETS [${year}]:`, err)
-    }
+  const payload: Record<string, any> = {
+    _year: currentYear
   }
 
-  console.log('🏁 ===== SYNC END =====\n')
+  // 🔥 SCRIVI TUTTE LE CATEGORIE (anche 0)
+  ALL_CATEGORIES.forEach(cat => {
+    const row = categoryRows[cat]
+    if (!row) return
+
+    const value = totals[cat] ?? 0
+
+    payload[`${cat}_${column}`] = {
+      cell: `${column}${row}`,
+      value
+    }
+
+    if (!totals[cat]) {
+      console.log(`🧹 RESET ${cat} → 0`)
+    } else {
+      console.log(`✅ SET ${cat} → ${value}`)
+    }
+  })
+
+  console.log('📤 SEND TO SHEETS:', payload)
+
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+
+    console.log('📡 STATUS:', res.status)
+    const text = await res.text()
+    console.log('📡 RESPONSE:', text)
+
+  } catch (err) {
+    console.error('❌ ERRORE FETCH:', err)
+  }
+
+  console.log('🏁 ===== END SYNC =====\n')
 }
