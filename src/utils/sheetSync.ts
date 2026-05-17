@@ -1,168 +1,90 @@
-// ✅ TUTTI I MESI
-const monthColumns = [
-  'B','C','D','E','F','G','H','I','J','K','L','M'
-]
+import { categoryRows, monthColumns } from './sheetConfig.js'
 
-// ✅ mapping categorie → righe
-const categoryRows: Record<string, number> = {
-  // CASA
-  mutuo: 30,
-  affitto: 31,
-  utenza: 32,
-  rate: 33,
-  'oggetti casa': 34,
-  assicurazioni: 35,
-
-  // TRASPORTI
-  'metro/bus': 38,
-  benzina: 39,
-
-  // SPESA DAILY
-  supermercato: 42,
-  'cene/uscite': 43,
-  vario: 44,
-  'shopping vestiti': 45,
-  cosmetica: 46,
-
-  // ENTERTAINMENT
-  entertainment: 49,
-
-  // HEALTH
-  palestra: 52,
-  salute: 53,
-  psicologo: 54,
-
-  // HOLIDAYS
-  roadtrip: 57,
-  vacanze: 58,
-
-  // TASSE
-  commercialista: 61,
-  'tax autonomo': 62,
-  'gastos autonomo': 63,
-  'tax varie': 64
-}
-
-// 🔥 CALCOLO
-export function calculateUserTotals(expenses: any[], userEmail: string) {
+// =====================
+// CALCOLO TOTALI UTENTE
+// =====================
+export function calculateUserTotals(
+  expenses: any[],
+  userEmail: string
+): Record<string, number> {
   const result: Record<string, number> = {}
 
-  console.log('📦 ALL EXPENSES:', expenses) // 👈 LOG 1
-  console.log('👤 USER EMAIL:', userEmail) // 👈 LOG 2
-
-  expenses.forEach(e => {
-    console.log('➡️ EXPENSE RAW:', e) // 👈 LOG 3
-
+  for (const e of expenses) {
     const cat = e.category?.toLowerCase().trim()
-    console.log('🏷️ CATEGORY NORMALIZED:', cat) // 👈 LOG 4
-
-    if (!cat) {
-      console.warn('⚠️ Categoria vuota, skip')
-      return
-    }
-
-    const current = result[cat] ?? 0
+    if (!cat) continue
 
     let value = 0
 
     if (e.type === 'personal' && e.paidBy === userEmail) {
       value = e.amount
-      console.log('💰 PERSONAL EXPENSE:', value) // 👈 LOG 5
-    }
-
-    if (e.type === 'shared') {
+    } else if (e.type === 'shared') {
       value = e.amount / 2
-      console.log('🤝 SHARED EXPENSE (half):', value) // 👈 LOG 6
     }
 
-    if (value === 0) {
-      console.warn('⚠️ VALUE = 0 → controlla type o paidBy') // 👈 LOG 7
-    }
-
-    result[cat] = current + value
-
-    console.log('➕ UPDATED TOTAL:', cat, result[cat]) // 👈 LOG 8
-  })
-
-  console.log('📊 FINAL TOTALS:', result) // 👈 LOG 9
+    result[cat] = (result[cat] ?? 0) + value
+  }
 
   return result
 }
 
-// 🔥 SYNC SHEETS — una richiesta per anno, con tutte le celle dei mesi di quell'anno
+// =====================
+// SYNC MESE CORRENTE
+// =====================
 export async function syncToSheets(
   expenses: any[],
   userEmail: string,
   scriptUrl: string
-) {
-  console.log('\n🚀 ===== SYNC CURRENT MONTH =====')
-
-  const ALL_CATEGORIES = Object.keys(categoryRows)
-
+): Promise<void> {
   const now = new Date()
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth()
   const column = monthColumns[currentMonth]
 
-  console.log('📅 Sync mese:', currentYear, currentMonth)
-
-  // 🔥 FILTRA SOLO MESE CORRENTE
+  // Filtra solo il mese corrente
   const monthExpenses = expenses.filter(e => {
     if (!e.created_at) return false
-
     const d = new Date(e.created_at)
-
-    return (
-      d.getFullYear() === currentYear &&
-      d.getMonth() === currentMonth
-    )
+    return d.getFullYear() === currentYear && d.getMonth() === currentMonth
   })
-
-  console.log('📦 EXPENSES MESE:', monthExpenses)
 
   const totals = calculateUserTotals(monthExpenses, userEmail)
 
-  console.log('📊 TOTALS:', totals)
+  console.log(`📊 [${userEmail}] totals:`, totals)
 
-  const payload: Record<string, any> = {
-    _year: currentYear
-  }
+  // Costruisce payload con tutte le categorie (reset a 0 se assenti)
+  const payload: Record<string, any> = { _year: currentYear }
 
-  // 🔥 SCRIVI TUTTE LE CATEGORIE (anche 0)
-  ALL_CATEGORIES.forEach(cat => {
-    const row = categoryRows[cat]
-    if (!row) return
-
-    const value = totals[cat] ?? 0
-
+  for (const [cat, row] of Object.entries(categoryRows)) {
     payload[`${cat}_${column}`] = {
       cell: `${column}${row}`,
-      value
+      value: totals[cat] ?? 0
     }
-
-    if (!totals[cat]) {
-      console.log(`🧹 RESET ${cat} → 0`)
-    } else {
-      console.log(`✅ SET ${cat} → ${value}`)
-    }
-  })
-
-  console.log('📤 SEND TO SHEETS:', payload)
-
-  try {
-    const res = await fetch(scriptUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-
-    console.log('📡 STATUS:', res.status)
-    const text = await res.text()
-    console.log('📡 RESPONSE:', text)
-
-  } catch (err) {
-    console.error('❌ ERRORE FETCH:', err)
   }
 
-  console.log('🏁 ===== END SYNC =====\n')
+  // Fetch con timeout esplicito
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30_000)
+
+  try {
+   console.log(`🚀 [${userEmail}] starting fetch to Google...`)
+const res = await fetch(scriptUrl, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(payload),
+  signal: controller.signal,
+  redirect: 'follow'
+})
+console.log(`📡 [${userEmail}] fetch response status: ${res.status}`)
+
+    const text = await res.text()
+    console.log(`✅ [${userEmail}] sheet updated — status ${res.status}:`, text)
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      console.error(`⏱️ [${userEmail}] fetch timeout dopo 8s`)
+    } else {
+      console.error(`❌ [${userEmail}] fetch error:`, err.message)
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
 }
